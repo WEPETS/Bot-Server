@@ -62,5 +62,6 @@ pub async fn mw_reponse_map(
         client_error,
     );
 
+    debug!("\n");
     error_res.unwrap_or(res)
 }

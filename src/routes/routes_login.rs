@@ -1,19 +1,33 @@
+use std::path::Path;
+
 // region: --- Imports
 use axum::{
+    extract::Query,
     extract::State,
     http::HeaderValue,
     response::{IntoResponse, Response},
-    routing::{post, Route},
+    routing::{get, post, Route},
     Json, Router,
 };
-use serde::Deserialize;
+use serde::{de::Visitor, Deserialize, Deserializer};
 use serde_json::{json, Value};
 use tracing::{debug, info};
+
+use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
+use sui_types::{
+    base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
+    crypto::Ed25519SuiSignature,
+};
 
 use crate::{
     ctx::Ctx,
     get_config,
-    models::{ModelManager, UserForAuth, UserForCreate, UserForLogin},
+    models::{
+        discord_profile::{self, DiscordProfile, DiscordProfileBmc, DiscordProfileForCreate},
+        wallet::{WalletBmc, WalletForCreate},
+        ModelManager, UserForAuth, UserForCreate, UserForLogin,
+    },
     pwd::{self, ContentToHash},
     token::{create_token, Token},
 };
@@ -25,128 +39,144 @@ use crate::{
 
 pub fn routes(mm: ModelManager) -> Router {
     Router::new()
-        .route("/login", post(login_handler))
-        .route("/signup", post(signup_handler))
-        // .route("/logoff", post(logoff_handler))
+        .route("/register", get(register_hanlder))
         .with_state(mm)
 }
 
-// region:    --- Login
-pub async fn login_handler(
-    State(mm): State<ModelManager>,
-    Json(payload): Json<LoginPayload>,
-) -> Result<Response> {
-    debug!("{:<12} - login_handler", "HANDLER");
-
-    let route_ctx = Ctx::root_ctx();
-
-    let (res, token) = _login_handler(&route_ctx, &mm, payload).await?;
-    let mut res = res.into_response();
-
-    let token: String = token.to_string();
-
-    res.headers_mut()
-        .insert("authentication", HeaderValue::from_str(&token)?);
-
-    Ok(res)
-}
-
-async fn _login_handler(
-    ctx: &Ctx,
-    mm: &ModelManager,
-    payload: LoginPayload,
-) -> Result<(Json<Value>, Token)> {
-    let LoginPayload { username, password } = payload;
-    // user exist
-    let user = UserBmc::get_first_by_username::<UserForLogin>(ctx, mm, username.as_str())
-        .await?
-        .ok_or(Error::LoginFailUsernameNotFound)?;
-
-    // check password
-    let config = get_config();
-    pwd::validate_pwd(
-        &ContentToHash {
-            content: password.clone(),
-            salt: config.SERVICE_PASSWORD_SALT.to_string(),
-        },
-        &user.pwd,
-    )
-    .map_err(|_| Error::LoginFailPwdNotMatching { user_id: user.id })?;
-
-    // create token
-    let token = create_token(&user.username, user.token_salt)?;
-
-    Ok((
-        Json(json!({
-            "result": {
-                "success": true
-            }
-        })),
-        token,
-    ))
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LoginPayload {
-    pub username: String,
-    pub password: String,
-}
-// endregion: --- Login
-
 // region:    --- Signup
-async fn signup_handler(
+async fn register_hanlder(
+    query: Query<CodeQuery>,
     State(mm): State<ModelManager>,
-    Json(payload): Json<SignupPayload>,
 ) -> Result<Response> {
-    debug!("{:<12} - signup_handler", "HANDLER");
+    debug!("{:<12} - register_handler", "HANDLER");
     let root_ctx = Ctx::root_ctx();
-    let (res, token) = _signup_handler(&root_ctx, &mm, payload).await?;
-    let mut res = res.into_response();
 
-    let token: String = token.to_string();
+    // get the token
+    let token = query.0.code;
 
-    res.headers_mut()
-        .insert("authentication", HeaderValue::from_str(&token)?);
+    // get user discord info
+    let user_info = get_user_info(token.as_str()).await?;
 
-    Ok(res)
+    // create new user
+    let res = _register_handler(&root_ctx, &mm, user_info).await?;
+
+    Ok(res.into_response())
 }
 
-async fn _signup_handler(
+async fn get_user_info(code: &str) -> Result<DiscordUserInfResonse> {
+    let config = get_config();
+
+    let reridect_uri = format!("{}/auth/register", config.CLOUDFLARE_SERVER_URL);
+    let form_data = [
+        ("code", code),
+        ("client_id", config.DISCORD_CLIENT_ID.as_str()),
+        ("client_secret", config.DISCORD_CLIENT_SECRET.as_str()),
+        ("grant_type", "authorization_code"),
+        ("redirect_uri", reridect_uri.as_str()),
+    ];
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://discord.com/api/oauth2/token")
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
+        .form(&form_data)
+        .send()
+        .await
+        .map_err(|_| Error::DiscordTokenRequestFail)?;
+
+    let response_body = response
+        .json::<DiscordTokenResponse>()
+        .await
+        .map_err(|_| Error::ParseTokenFail)?;
+
+    let user_info_res = client
+        .get("https://discord.com/api/users/@me")
+        .header(
+            "Authorization",
+            format!("Bearer {}", response_body.access_token).as_str(),
+        )
+        .send()
+        .await
+        .map_err(|_| Error::DiscordTokenRequestFail)?;
+
+    let user_info_json = user_info_res
+        .json::<DiscordUserInfResonse>()
+        .await
+        .map_err(|_| Error::ParseTokenFail)?;
+
+    Ok({ user_info_json })
+}
+
+async fn _register_handler(
     ctx: &Ctx,
     mm: &ModelManager,
-    payload: SignupPayload,
-) -> Result<(Json<Value>, Token)> {
-    // upwrap payload
-    let SignupPayload { username, password } = payload;
-
+    user_info: DiscordUserInfResonse,
+) -> Result<Json<Value>> {
     // check user exist
-    UserBmc::get_first_by_username::<User>(&ctx, &mm, &username)
-        .await?
-        .map_or_else(
-            || Ok(()),
-            |_| Err(Error::SignUpFailedUserAlreadyExist(username.clone())),
-        )?;
+    match DiscordProfileBmc::get_by_discord_id::<DiscordProfile>(ctx, mm, user_info.id).await {
+        Ok(_) => {
+            Error::SignUpFailedUserAlreadyExist(user_info.username.clone());
+        }
+        Err(e) => (),
+    }
 
     // create user
-    let data = UserForCreate {
-        username,
-        pwd: password,
+    let user_c = UserForCreate {
+        username: Some(user_info.username.clone()),
+        pwd: None,
+        email: None,
     };
-    let user_id = UserBmc::create(ctx, mm, data).await?;
+    let user_id = UserBmc::create(ctx, mm, user_c).await?;
 
-    // create token
-    let user = UserBmc::get::<UserForAuth>(&ctx, &mm, user_id).await?;
-    let token = create_token(&user.username, user.token_salt)?;
+    // create discord profile
+    let discord_profile_c = DiscordProfileForCreate {
+        id: user_id,
+        discord_id: user_info.id,
+        username: user_info.username.clone(),
+        global_name: user_info.global_name,
+        avatar: user_info.avatar,
+    };
+    let d_id = DiscordProfileBmc::create(ctx, mm, discord_profile_c).await?;
+
+    // create wallet
+    let keystore_path = Path::new("/home/ganzzi/.sui/sui_config/sui.keystore");
+    let mut keystore =
+        Keystore::from(FileBasedKeystore::new(&keystore_path.to_path_buf()).unwrap());
+
+    let (address, phrase, scheme) = keystore
+        .generate_and_add_new_key(SignatureScheme::ED25519, None, None)
+        .unwrap();
+
+    let sign_type = match scheme {
+        SignatureScheme::ED25519 => "ed25519",
+        _ => "",
+    }
+    .to_string();
+
+    let wallet_c = WalletForCreate {
+        id: user_id,
+        pub_key: address.to_string(),
+        sign_type,
+        phrase,
+    };
+    WalletBmc::create(ctx, mm, wallet_c).await?;
 
     // response
     let res = Json(json!({
         "result": {
             "success": true,
-            "user_id": user_id
         }
     }));
 
-    Ok((res, token))
+    Ok((res))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CodeQuery {
+    code: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -154,27 +184,44 @@ pub struct SignupPayload {
     username: String,
     password: String,
 }
-// endregion: --- Signup
 
-// region:    --- Logoff
-// Logoff handler just doing nothing for now
-// TODO: fix the logoff hanlder for reset token e.g.
-pub async fn logoff_handler(
-    State(mm): State<ModelManager>,
-    ctx: Ctx,
-    Json(payload): Json<LogoffPayload>,
-) -> Result<Json<Value>> {
-    debug!("{:<12} - logoff_handler", "HANDLER");
+#[derive(Debug, Deserialize)]
+pub struct DiscordUserInfResonse {
+    #[serde(deserialize_with = "parse")]
+    pub id: i64,
+    pub username: String,
+    pub avatar: String,
+    pub global_name: String,
+    // other fiels..
+    // pub discriminator: String,
+    // pub public_flags: u64,
+    // pub premium_type: u64,
+    // pub flags: u64,
+    // pub banner: Option<String>,
+    // pub accent_color: Option<u64>,
+    // pub avatar_decoration_data: Option<String>,
+    // pub banner_color: Option<String>,
+    // pub mfa_enabled: bool,
+    // pub locale: String,
+}
 
-    let body = Json(json!({
-        "result": {
-            "success": true
-        }
-    }));
-
-    Ok(body)
+fn parse<'de, T, D>(de: D) -> core::result::Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: std::str::FromStr,
+    <T as std::str::FromStr>::Err: std::fmt::Display,
+{
+    Ok(String::deserialize(de)?
+        .parse()
+        .map_err(serde::de::Error::custom)?)
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LogoffPayload {}
-// endregion: --- Logoff
+struct DiscordTokenResponse {
+    access_token: String,
+    token_type: String,
+    expires_in: i32,
+    refresh_token: String,
+    scope: String,
+}
+// endregion: --- Signup

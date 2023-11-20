@@ -1,7 +1,9 @@
 // region -- Modules
 mod base_crud;
+pub mod discord_profile;
 mod error;
-mod user;
+pub mod user;
+pub mod wallet;
 
 pub use self::error::{Error, Result};
 use crate::store::{new_db_pool, DbPool};

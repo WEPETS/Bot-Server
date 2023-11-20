@@ -33,6 +33,12 @@ pub enum Error {
 
     // -- External Modules
     SerdeJson(String),
+
+    // discord request
+    DiscordTokenRequestFail,
+    ParseTokenFail,
+
+    FailToParse,
 }
 
 // region:    --- Froms
@@ -65,6 +71,7 @@ impl From<InvalidHeaderValue> for Error {
         Error::SerdeJson(format!("Invalid header value: {}", err))
     }
 }
+
 // endregion: --- Froms
 
 // region:    --- Axum IntoResponse

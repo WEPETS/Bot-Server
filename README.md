@@ -1,11 +1,17 @@
 
-## Starting the DB
+## Starting the DB, Cloudflared, Sui
 
 ```sh
 # Start postgresql server docker image:
 docker run --rm --name pg -p 5432:5432 \
    -e POSTGRES_PASSWORD=welcome \
    postgres:15
+
+# Share local 
+cloudflared tunnel --url http://localhost:8080
+
+# Start sui
+sui start
 ```
 
 ## Dev (watch)
@@ -14,10 +20,10 @@ docker run --rm --name pg -p 5432:5432 \
 
 ```sh
 # Terminal 1 - To run the server.
-cargo watch -q -c -w src/ -w .cargo/ -x "run"
+cargo watch -q -c -w src/ -x "run"
 
 # Terminal 2 - To run the quick_dev.
-cargo watch -q -c -w examples/ -x "run --example quick_dev"
+cargo watch -q -c -w examples/ -w .env -x "run --example quick_dev"
 ```
 
 ## Unit Test (watch)

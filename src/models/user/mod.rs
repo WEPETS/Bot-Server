@@ -11,13 +11,23 @@ use tracing::info;
 use uuid::Uuid;
 
 use super::base_crud::{update, DbBmc};
+use super::discord_profile::{DiscordProfile, DiscordProfileBmc};
+use super::wallet::{Wallet, WalletBmc};
 use super::{base_crud, ModelManager};
 
 // region:    --- User Types
+#[derive(Clone, Debug, Serialize)]
+pub struct UserInfo {
+    pub base_info: User,
+    pub discord: DiscordProfile,
+    pub wallet: Wallet,
+}
+
 #[derive(Clone, Fields, FromRow, Debug, Serialize)]
 pub struct User {
     pub id: i64,
-    pub username: String,
+    pub username: Option<String>,
+    pub email: Option<String>,
 }
 
 #[derive(Clone, Fields, FromRow, Debug)]
@@ -38,15 +48,17 @@ pub struct UserForAuth {
     pub token_salt: Uuid,
 }
 
-#[derive(Deserialize, Fields)]
+#[derive(Deserialize, Fields, Clone)]
 pub struct UserForCreate {
-    pub username: String,
-    pub pwd: String,
+    pub username: Option<String>,
+    pub pwd: Option<String>,
+    pub email: Option<String>,
 }
 
 #[derive(Deserialize, Fields)]
 pub struct UserForUpdate {
     pwd: String,
+    email: String,
 }
 /// Marker trait
 pub trait UserModel: HasFields + for<'r> FromRow<'r, PgRow> + Unpin + Send {}
@@ -77,6 +89,38 @@ impl UserBmc {
         base_crud::get::<Self, E>(ctx, mm, id).await
     }
 
+    pub async fn get_user_info(ctx: &Ctx, mm: &ModelManager, id: i64) -> Result<UserInfo> {
+        let base_info = UserBmc::get::<User>(ctx, mm, id).await?;
+        let discord = DiscordProfileBmc::get::<DiscordProfile>(ctx, mm, id).await?;
+        let wallet = WalletBmc::get::<Wallet>(ctx, mm, id).await?;
+
+        let user_info = UserInfo {
+            base_info,
+            discord,
+            wallet,
+        };
+
+        Ok(user_info)
+    }
+
+    pub async fn get_user_info_by_discord_id(
+        ctx: &Ctx,
+        mm: &ModelManager,
+        id: i64,
+    ) -> Result<UserInfo> {
+        let discord = DiscordProfileBmc::get_by_discord_id::<DiscordProfile>(ctx, mm, id).await?;
+        let base_info = UserBmc::get::<User>(ctx, mm, discord.id).await?;
+        let wallet = WalletBmc::get::<Wallet>(ctx, mm, discord.id).await?;
+
+        let user_info = UserInfo {
+            base_info,
+            discord,
+            wallet,
+        };
+
+        Ok(user_info)
+    }
+
     pub async fn get_first_by_username<E>(
         ctx: &Ctx,
         mm: &ModelManager,
@@ -96,16 +140,31 @@ impl UserBmc {
         Ok(user)
     }
 
+    pub async fn get_first_by_id<E>(ctx: &Ctx, mm: &ModelManager, id: i64) -> Result<Option<E>>
+    where
+        E: UserModel,
+    {
+        let db_pool = mm.get_db_pool();
+
+        let user = sqlb::select()
+            .table(Self::TABLE)
+            .and_where("id", "=", id)
+            .fetch_optional::<_, E>(db_pool)
+            .await?;
+
+        Ok(user)
+    }
+
     pub async fn create(ctx: &Ctx, mm: &ModelManager, data: UserForCreate) -> Result<i64> {
         let config = get_config();
 
-        let clear_pwd = data.pwd.clone();
-        let mut data_to_create = data;
+        let mut data_to_create = data.clone();
+        let clear_pwd = data.pwd.unwrap_or_default().clone();
 
-        data_to_create.pwd = pwd::hash_pwd(&ContentToHash {
+        data_to_create.pwd = Some(pwd::hash_pwd(&ContentToHash {
             content: clear_pwd,
             salt: config.SERVICE_PASSWORD_SALT.to_string(),
-        })?;
+        })?);
 
         base_crud::create::<UserBmc, UserForCreate>(ctx, mm, data_to_create).await
     }
@@ -120,7 +179,10 @@ impl UserBmc {
 
         info!(hashed_pwd);
 
-        let pwd = UserForUpdate { pwd: hashed_pwd };
+        let pwd = UserForUpdate {
+            pwd: hashed_pwd,
+            email: "boi@gmail.com".to_string(),
+        };
         base_crud::update::<UserBmc, UserForUpdate>(ctx, mm, id, pwd).await
     }
 
@@ -136,8 +198,9 @@ mod tests {
     use super::*;
     use crate::_dev_init;
     use crate::models::Error;
-    use anyhow::Result;
+    use anyhow::{Ok, Result};
     use serial_test::serial;
+    use tracing::debug;
 
     #[serial]
     #[tokio::test]
@@ -147,8 +210,9 @@ mod tests {
         let ctx = Ctx::root_ctx();
 
         let user_c = UserForCreate {
-            username: "abc".to_string(),
-            pwd: "123".to_string(),
+            username: Some("abc".to_string()),
+            pwd: Some("123".to_string()),
+            email: Some("boi@gmail.com".to_string()),
         };
 
         let id = UserBmc::create(&ctx, &mm, user_c).await?;
@@ -163,6 +227,7 @@ mod tests {
             id,
             UserForUpdate {
                 pwd: "new_pwd".to_string(),
+                email: "boi@gmail.com".to_string(),
             },
         )
         .await?;
@@ -180,6 +245,18 @@ mod tests {
             "EntityNotFound not matching"
         );
 
+        Ok(())
+    }
+
+    #[serial]
+    #[tokio::test]
+    async fn test_get_info_ok() -> Result<()> {
+        let mm = _dev_init::init_db_for_test().await;
+        let ctx = Ctx::root_ctx();
+
+        let user_info = UserBmc::get_user_info(&ctx, &mm, 1001).await?;
+
+        debug!("info: {:?}", user_info);
         Ok(())
     }
 }

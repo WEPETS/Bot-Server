@@ -1,5 +1,5 @@
 [package]
-name = "auth"
+name = "we_pet"
 version = "0.1.0"
 edition = "2021"
 
@@ -30,10 +30,22 @@ base64 = "0.21"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 time = "0.3"
 strum_macros = "0.25"
-
+dotenvy = "0.15.7"
+sui-sdk = { git = "https://github.com/MystenLabs/sui" }
+sui-types = { git = "https://github.com/MystenLabs/sui" }
+sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui" }
+sui-keys = { git = "https://github.com/MystenLabs/sui" }
+serenity = { version = "0.11", default-features = false, features = [
+    "client",
+    "gateway",
+    "rustls_backend",
+    "model",
+] }
+anyhow = "1"
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+tempfile = "3.8.1"
 
 [dev-dependencies]
-anyhow = "1"
 httpc-test = "0.1"
 serial_test = "2"
 rand = "0.8"       # For examples/gen-key

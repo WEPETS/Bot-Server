@@ -13,6 +13,8 @@ pub fn get_config() -> &'static Config {
 // region: --- Config and inplementation
 #[allow(non_snake_case)]
 pub struct Config {
+    pub ENVIRONMENT: String,
+
     pub SERVICE_WEB_FOLDER: String,
 
     pub SERVICE_DB_URL: String,
@@ -24,17 +26,39 @@ pub struct Config {
     pub SERVICE_TOKEN_DURATION_SEC: f64,
 
     pub SERVICE_PASSWORD_SALT: String,
+
+    pub DISCORD_CLIENT_ID: String,
+
+    pub DISCORD_CLIENT_SECRET: String,
+
+    pub DISCORD_TOKEN: String,
+
+    pub CLOUDFLARE_SERVER_URL: String,
+
+    pub APPLICATION_ID: u64,
+
+    pub PACKAGE: String,
+
+    pub SUI_CLIENT_ADDRESS: String,
 }
 
 impl Config {
     fn load_from_env() -> Result<Config> {
         Ok(Config {
+            ENVIRONMENT: get_from_env("ENVIRONMENT")?,
             SERVICE_WEB_FOLDER: get_from_env("SERVICE_WEB_FOLDER")?,
             SERVICE_DB_URL: get_from_env("SERVICE_DB_URL")?,
             SERVICE_PWD_KEY: get_env_b64u_as_u8s("SERVICE_PWD_KEY")?,
             SERVICE_TOKEN_DURATION_SEC: get_env_parse("SERVICE_TOKEN_DURATION_SEC")?,
             SERVICE_TOKEN_KEY: get_env_b64u_as_u8s("SERVICE_TOKEN_KEY")?,
             SERVICE_PASSWORD_SALT: get_from_env("SERVICE_PASSWORD_SALT")?,
+            DISCORD_CLIENT_ID: get_from_env("DISCORD_CLIENT_ID")?,
+            CLOUDFLARE_SERVER_URL: get_from_env("CLOUDFLARE_SERVER_URL")?,
+            DISCORD_CLIENT_SECRET: get_from_env("DISCORD_CLIENT_SECRET")?,
+            APPLICATION_ID: get_env_parse("APPLICATION_ID")?,
+            PACKAGE: get_env_parse("PACKAGE")?,
+            SUI_CLIENT_ADDRESS: get_env_parse("SUI_CLIENT_ADDRESS")?,
+            DISCORD_TOKEN: get_env_parse("DISCORD_TOKEN")?,
         })
     }
 }

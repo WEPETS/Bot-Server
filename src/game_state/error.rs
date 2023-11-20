@@ -1,40 +1,20 @@
-use sui_sdk::error::Error as SuiError;
-use sui_sdk::types::base_types::ObjectIDParseError;
+use serde::Serialize;
+use serde_with::{serde_as, DisplayFromStr};
 
 use crate::models;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[serde_as]
+#[derive(Debug, Serialize)]
 pub enum Error {
-    // -- Config
-    ConfigMissing(&'static str),
-
-    WrongFormat(&'static str),
-
     Model(models::Error),
-
-    ObjectID(ObjectIDParseError),
-
-    Sui(SuiError),
 }
 
 // region:    --- Froms
 impl From<models::Error> for Error {
     fn from(val: models::Error) -> Self {
         Self::Model(val)
-    }
-}
-
-impl From<ObjectIDParseError> for Error {
-    fn from(val: ObjectIDParseError) -> Self {
-        Self::ObjectID(val)
-    }
-}
-
-impl From<SuiError> for Error {
-    fn from(val: SuiError) -> Self {
-        Self::Sui(val)
     }
 }
 // endregion: --- Froms
@@ -47,4 +27,4 @@ impl core::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
-// endregion:    --- Error Boilerplate
+// endregion: --- Error Boilerplate
