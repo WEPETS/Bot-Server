@@ -2,6 +2,7 @@ use anyhow;
 use dotenvy::dotenv;
 use serenity::async_trait;
 use serenity::builder::{CreateApplicationCommand, CreateApplicationCommands};
+use serenity::futures::StreamExt;
 use serenity::model::application::command::Command;
 use serenity::model::application::interaction::application_command::CommandDataOption;
 use serenity::model::application::interaction::{Interaction, InteractionResponseType};
@@ -11,6 +12,7 @@ use serenity::model::id::{ApplicationId, ChannelId, GuildId, UserId};
 use serenity::prelude::*;
 use std::env;
 use std::str::FromStr;
+use sui_keys::keystore::Keystore;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use tracing::{debug, info};
@@ -29,6 +31,7 @@ pub struct Handler {
     pub default_address: SuiAddress,
     pub mm: ModelManager,
     pub config: &'static Config,
+    pub keystore: Keystore,
 }
 
 #[async_trait]
@@ -62,11 +65,15 @@ impl EventHandler for Handler {
                     "state" => {
                         res = get_game_state(&self, &user_info).await;
                     }
-                    "hunt" => {
-                        res = do_hunt(&self, &command.data.options, &user_info).await;
-                    }
+                    // "hunt" => {
+                    //     res = do_hunt(&self, &command.data.options, &user_info).await;
+                    // }
                     "battle" => {
-                        res = do_battle(&self, &command.data.options, &user_info).await;
+                        if check_sui(&self.sui_client, &user_info.wallet.pub_key).await {
+                            res = do_battle(&self, &command.data.options, &user_info).await;
+                        } else {
+                            res = "you have no SUI coin".into();
+                        }
                     }
                     _ => res = "Player already exist".to_string(),
                 };
@@ -83,6 +90,7 @@ impl EventHandler for Handler {
                             .to_string();
 
                         res = format!("Enter this link to authorize and register: https://discord.com/api/oauth2/authorize?client_id=1172504182691991562&redirect_uri=https%3A%2F%2F{}%2Fauth%2Fregister&response_type=code&scope=identify", r_uri);
+                        // res = "https://discord.com/api/oauth2/authorize?client_id=1172504182691991562&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth%2Fregister&response_type=code&scope=identify".to_string();
                     }
                     _ => res = "Not a player".to_string(),
                 };
@@ -106,7 +114,7 @@ impl EventHandler for Handler {
 
         let mut cmds2 = ApplicationId(self.config.APPLICATION_ID);
         let cs = Command::set_global_application_commands(ctx.http.clone(), |commands| {
-            commands.create_application_command(|command| commands::hunt::register(command));
+            // commands.create_application_command(|command| commands::hunt::register(command));
             commands.create_application_command(|command| commands::battle::register(command));
             commands.create_application_command(|command| {
                 command.name("register").description("register to play...")
@@ -117,7 +125,7 @@ impl EventHandler for Handler {
         })
         .await;
 
-        info!("command: {cs:?}");
+        // info!("command: {cs:?}");
     }
 }
 
@@ -129,34 +137,55 @@ async fn is_player(mm: &ModelManager, discord_id: i64) -> bool {
 }
 
 async fn get_game_state(handler: &Handler, user_info: &UserInfo) -> String {
-    let a = UserGameState::new_state(&handler.sui_client, &handler.mm, user_info)
-        .await
-        .map_err(|e| debug!("error: {e:?}"))
-        .unwrap()
-        .get_game_state_board();
+    let a = UserGameState::new_state(
+        &handler.sui_client,
+        &handler.mm,
+        &handler.package_id,
+        user_info,
+    )
+    .await
+    .map_err(|e| debug!("error: {e:?}"))
+    .unwrap()
+    .get_game_state_board();
     a
 }
 
-async fn do_hunt(handler: &Handler, options: &[CommandDataOption], user_info: &UserInfo) -> String {
-    let signer = get_signer(&user_info.wallet.pub_key);
-    let _data = commands::hunt::do_hunt(&handler.sui_client, &handler.package_id, options, signer)
-        .await
-        .map_err(|e| println!("error: {e:?}"))
-        .unwrap();
+// async fn do_hunt(handler: &Handler, options: &[CommandDataOption], user_info: &UserInfo) -> String {
+//     let signer = get_signer(&user_info.wallet.pub_key);
+//     let _data = commands::hunt::do_hunt(&handler.sui_client, &handler.package_id, options, signer)
+//         .await
+//         .map_err(|e| println!("error: {e:?}"))
+//         .unwrap();
 
-    get_game_state(&handler, user_info).await
+//     get_game_state(&handler, user_info).await
+// }
+
+async fn check_sui(sui_client: &SuiClient, address: &String) -> bool {
+    let sui_coins_stream = sui_client.coin_read_api().get_coins_stream(
+        SuiAddress::from_str(address.clone().as_str()).unwrap(),
+        None,
+    );
+
+    let sui_coin = sui_coins_stream.boxed().next().await;
+
+    sui_coin.is_some()
 }
-
 async fn do_battle(
     handler: &Handler,
     options: &[CommandDataOption],
     user_info: &UserInfo,
 ) -> String {
     let signer = get_signer(&user_info.wallet.pub_key);
-    let _data = commands::battle::do_battle(&handler.sui_client, options, signer)
-        .await
-        .map_err(|e| println!("error: {e:?}"))
-        .unwrap();
+    let _data = commands::battle::do_battle(
+        &handler.sui_client,
+        &handler.package_id,
+        // &handler.keystore,
+        options,
+        signer,
+    )
+    .await
+    .map_err(|e| println!("error: {e:?}"))
+    .unwrap();
 
     get_game_state(&handler, user_info).await
 }

@@ -1,11 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+    <meta />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Welcome Page</title>
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    Index.html page
+    <div class="container mt-5">
+      <h1 class="mb-4">Welcome {username}!</h1>
+
+      <!-- Display username from Rust state -->
+      <p id="message" class="lead">{message}</p>
+
+      <p>your wallet: {public_key}</p>
+
+      <!-- Button to make the HTTP request -->
+      <button id="requestButton" class="btn btn-primary">Request Faucet</button>
+      <p>
+        if the above button not work: Request SUI in the #devnet-faucet Discord
+        channels by enterring: <br />
+        <code> !faucet {public_key}</code> in
+        <a
+          href="https://discord.com/channels/916379725201563759/971488439931392130"
+          >devnet-channel</a
+        >
+      </p>
+
+      <!-- Bootstrap JavaScript (optional, for some components) -->
+      <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+      <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script> -->
+      <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+
+      <!-- Your custom JavaScript -->
+      <script>
+        document
+          .getElementById("requestButton")
+          .addEventListener("click", function () {
+            fetch("https://faucet.devnet.sui.io/gas", {
+              method: "POST",
+              mode: "no-cors", // Set the mode to 'no-cors'
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                FixedAmountRequest: {
+                  recipient: "{public_key}",
+                },
+              }),
+            })
+              .then((response) => {
+                if (!response.ok) {
+                  throw new Error("Network response was not ok");
+                }
+                console.log("Request sent successfully");
+              })
+              .catch((error) => {
+                console.error("Error making request:", error);
+                // Handle errors
+              });
+          });
+      </script>
+    </div>
   </body>
 </html>

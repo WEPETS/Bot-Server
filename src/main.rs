@@ -16,6 +16,7 @@ mod models;
 mod pwd;
 mod routes;
 mod store;
+mod sui_call;
 mod token;
 mod utils;
 
@@ -23,6 +24,7 @@ mod utils;
 pub use self::error::{Error, Result};
 pub use config::get_config;
 use dotenvy::dotenv;
+use sui_keys::keystore::{FileBasedKeystore, Keystore};
 use tokio::try_join;
 use tracing::field::debug;
 
@@ -41,6 +43,7 @@ use serenity::model::id::GuildId;
 use serenity::prelude::*;
 use std::env;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::str::FromStr;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -87,8 +90,11 @@ async fn main() -> Result<()> {
             | GatewayIntents::DIRECT_MESSAGES
             | GatewayIntents::MESSAGE_CONTENT;
 
-        let sui_client = SuiClientBuilder::default().build_localnet().await.unwrap();
+        let sui_client = SuiClientBuilder::default().build_devnet().await.unwrap();
         let default_address = SuiAddress::from_str(&config.SUI_CLIENT_ADDRESS).unwrap_or_default();
+        let keystore_path = Path::new("/home/ganzzi/.sui/sui_config/sui.keystore");
+        let mut keystore =
+            Keystore::from(FileBasedKeystore::new(&keystore_path.to_path_buf()).unwrap());
 
         let handler = Handler {
             sui_client,
@@ -96,6 +102,7 @@ async fn main() -> Result<()> {
             default_address,
             config,
             mm: mm.clone(),
+            keystore,
         };
 
         let mut discord_client = Client::builder(&discord_token, intents)

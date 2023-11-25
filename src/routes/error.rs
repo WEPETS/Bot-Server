@@ -2,6 +2,7 @@ use axum::http::header::InvalidHeaderValue;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
+use sui_types::base_types::ObjectIDParseError;
 use tracing::debug;
 
 use crate::middlewares::error::CtxExtError;
@@ -37,8 +38,13 @@ pub enum Error {
     // discord request
     DiscordTokenRequestFail,
     ParseTokenFail,
+    ParseUserFail,
 
     FailToParse,
+
+    FaucetFail,
+
+    ObjectIDParseError(String),
 }
 
 // region:    --- Froms
@@ -69,6 +75,12 @@ impl From<serde_json::Error> for Error {
 impl From<InvalidHeaderValue> for Error {
     fn from(err: InvalidHeaderValue) -> Self {
         Error::SerdeJson(format!("Invalid header value: {}", err))
+    }
+}
+
+impl From<ObjectIDParseError> for Error {
+    fn from(err: ObjectIDParseError) -> Self {
+        Error::ObjectIDParseError(format!("Invalid header value: {}", err))
     }
 }
 

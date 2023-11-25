@@ -31,10 +31,12 @@ uuid = { version = "1", features = ["v4", "fast-rng"] }
 time = "0.3"
 strum_macros = "0.25"
 dotenvy = "0.15.7"
-sui-sdk = { git = "https://github.com/MystenLabs/sui" }
+sui-sdk = { git = "https://github.com/MystenLabs/sui", package = "sui-sdk" }
 sui-types = { git = "https://github.com/MystenLabs/sui" }
 sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui" }
 sui-keys = { git = "https://github.com/MystenLabs/sui" }
+shared-crypto = { git = "https://github.com/MystenLabs/sui" }
+move-core-types = { git = "https://github.com/MystenLabs/sui" }
 serenity = { version = "0.11", default-features = false, features = [
     "client",
     "gateway",

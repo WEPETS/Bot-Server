@@ -1,3 +1,4 @@
+WePet - discord bot (document unfinished)
 
 ## Starting the DB, Cloudflared, Sui
 
@@ -47,6 +48,15 @@ cargo run --example quick_dev
 
 ```sh
 cargo test -- --nocapture
+
+cargo test test_create_profile_success -- --nocapture
+
+cargo test test_create_bot_success -- --nocapture
+
+cargo test test_faucet_success -- --nocapture
+
+cargo test test_get_bot_obj_success -- --nocapture
+
 
 ```
 

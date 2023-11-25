@@ -40,6 +40,10 @@ pub struct Config {
     pub PACKAGE: String,
 
     pub SUI_CLIENT_ADDRESS: String,
+
+    pub GAME_INFO_ID: String,
+
+    pub GAME_ADMIN_ID: String,
 }
 
 impl Config {
@@ -57,8 +61,10 @@ impl Config {
             DISCORD_CLIENT_SECRET: get_from_env("DISCORD_CLIENT_SECRET")?,
             APPLICATION_ID: get_env_parse("APPLICATION_ID")?,
             PACKAGE: get_env_parse("PACKAGE")?,
-            SUI_CLIENT_ADDRESS: get_env_parse("SUI_CLIENT_ADDRESS")?,
             DISCORD_TOKEN: get_env_parse("DISCORD_TOKEN")?,
+            SUI_CLIENT_ADDRESS: get_env_parse("SUI_CLIENT_ADDRESS")?,
+            GAME_INFO_ID: get_env_parse("GAME_INFO_ID")?,
+            GAME_ADMIN_ID: get_env_parse("GAME_ADMIN_ID")?,
         })
     }
 }

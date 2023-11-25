@@ -1,5 +1,6 @@
 // region -- Modules
 mod base_crud;
+pub mod bot;
 pub mod discord_profile;
 mod error;
 pub mod user;

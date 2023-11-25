@@ -21,5 +21,12 @@ CREATE TABLE "wallet" (
     id BIGINT PRIMARY KEY REFERENCES "user"(id),
     pub_key VARCHAR(100) NOT NULL,
     sign_type VARCHAR(10) NOT NULL,
-    phrase VARCHAR(255) NOT NULL
+    phrase VARCHAR(255) NOT NULL,
+    last_faucet BIGINT NULL
+);
+
+CREATE TABLE "bot" (
+    bot_id VARCHAR(100) PRIMARY KEY,
+    user_id BIGINT REFERENCES "user" (id),
+    last_creation BIGINT NULL
 );

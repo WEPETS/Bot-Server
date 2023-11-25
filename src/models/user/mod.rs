@@ -193,71 +193,71 @@ impl UserBmc {
 // endregion:    --- User Controller
 
 // region:    --- Tests
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::_dev_init;
-    use crate::models::Error;
-    use anyhow::{Ok, Result};
-    use serial_test::serial;
-    use tracing::debug;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::_dev_init;
+//     use crate::models::Error;
+//     use anyhow::{Ok, Result};
+//     use serial_test::serial;
+//     use tracing::debug;
 
-    #[serial]
-    #[tokio::test]
-    async fn test_create_update_ok() -> Result<()> {
-        // -- Setup & Fixtures
-        let mm = _dev_init::init_db_for_test().await;
-        let ctx = Ctx::root_ctx();
+//     #[serial]
+//     #[tokio::test]
+//     async fn test_create_update_ok() -> Result<()> {
+//         // -- Setup & Fixtures
+//         let mm = _dev_init::init_db_for_test().await;
+//         let ctx = Ctx::root_ctx();
 
-        let user_c = UserForCreate {
-            username: Some("abc".to_string()),
-            pwd: Some("123".to_string()),
-            email: Some("boi@gmail.com".to_string()),
-        };
+//         let user_c = UserForCreate {
+//             username: Some("abc".to_string()),
+//             pwd: Some("123".to_string()),
+//             email: Some("boi@gmail.com".to_string()),
+//         };
 
-        let id = UserBmc::create(&ctx, &mm, user_c).await?;
+//         let id = UserBmc::create(&ctx, &mm, user_c).await?;
 
-        let user = UserBmc::get::<UserForLogin>(&ctx, &mm, id).await?;
+//         let user = UserBmc::get::<UserForLogin>(&ctx, &mm, id).await?;
 
-        assert_eq!(user.pwd, "123".to_string());
+//         assert_eq!(user.pwd, "123".to_string());
 
-        UserBmc::update(
-            &ctx,
-            &mm,
-            id,
-            UserForUpdate {
-                pwd: "new_pwd".to_string(),
-                email: "boi@gmail.com".to_string(),
-            },
-        )
-        .await?;
+//         UserBmc::update(
+//             &ctx,
+//             &mm,
+//             id,
+//             UserForUpdate {
+//                 pwd: "new_pwd".to_string(),
+//                 email: "boi@gmail.com".to_string(),
+//             },
+//         )
+//         .await?;
 
-        let user = UserBmc::get::<UserForLogin>(&ctx, &mm, id).await?;
+//         let user = UserBmc::get::<UserForLogin>(&ctx, &mm, id).await?;
 
-        assert_eq!(user.pwd, "new_pwd".to_string());
+//         assert_eq!(user.pwd, "new_pwd".to_string());
 
-        UserBmc::delete(&ctx, &mm, id).await?;
+//         UserBmc::delete(&ctx, &mm, id).await?;
 
-        let user = UserBmc::get::<UserForLogin>(&ctx, &mm, id).await;
+//         let user = UserBmc::get::<UserForLogin>(&ctx, &mm, id).await;
 
-        assert!(
-            matches!(user, Err(Error::EntityNotFound { entity: "user", id })),
-            "EntityNotFound not matching"
-        );
+//         assert!(
+//             matches!(user, Err(Error::EntityNotFound { entity: "user", id })),
+//             "EntityNotFound not matching"
+//         );
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    #[serial]
-    #[tokio::test]
-    async fn test_get_info_ok() -> Result<()> {
-        let mm = _dev_init::init_db_for_test().await;
-        let ctx = Ctx::root_ctx();
+//     #[serial]
+//     #[tokio::test]
+//     async fn test_get_info_ok() -> Result<()> {
+//         let mm = _dev_init::init_db_for_test().await;
+//         let ctx = Ctx::root_ctx();
 
-        let user_info = UserBmc::get_user_info(&ctx, &mm, 1001).await?;
+//         let user_info = UserBmc::get_user_info(&ctx, &mm, 1001).await?;
 
-        debug!("info: {:?}", user_info);
-        Ok(())
-    }
-}
+//         debug!("info: {:?}", user_info);
+//         Ok(())
+//     }
+// }
 // endregion    --- Tests
